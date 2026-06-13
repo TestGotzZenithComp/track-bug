@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bug Tracker — STIN</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans Thai', sans-serif;
+      background: #161616;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: #1c1c1c;
+      border-bottom: 1px solid #2a2a2a;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header-brand { font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    #last-updated { font-size: 12px; color: #666; }
+    .refresh-btn {
+      background: none; border: 1px solid #383838; color: #999;
+      padding: 4px 14px; border-radius: 6px; cursor: pointer; font-size: 12px;
+      transition: all .2s;
+    }
+    .refresh-btn:hover { background: #2a2a2a; color: #ddd; }
+    .export-btn {
+      background: #14532d; border: 1px solid #166534; color: #4ade80;
+      padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;
+      font-weight: 500; transition: all .2s;
+    }
+    .export-btn:hover { background: #166534; color: #86efac; }
+
+    /* ── Layout ── */
+    .container { padding: 20px 24px; max-width: 1600px; margin: 0 auto; }
+
+    /* ── Cards ── */
+    .cards-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
+    .card {
+      background: #1e1e1e; border: 1px solid #2a2a2a;
+      border-radius: 10px; padding: 20px;
+    }
+    .card-label { font-size: 13px; color: #888; margin-bottom: 10px; }
+    .card-value { font-size: 38px; font-weight: 700; line-height: 1; }
+    .card-value.c-total    { color: #e0e0e0; }
+    .card-value.c-new      { color: #ef4444; }
+    .card-value.c-progress { color: #f97316; }
+    .card-value.c-fixed    { color: #4ade80; }
+
+    /* ── Charts ── */
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+    .chart-card {
+      background: #1e1e1e; border: 1px solid #2a2a2a;
+      border-radius: 10px; padding: 20px;
+    }
+    .chart-title { font-size: 14px; font-weight: 500; color: #ccc; margin-bottom: 10px; }
+    .chart-legend {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      margin-bottom: 12px; font-size: 12px; color: #bbb; min-height: 20px;
+    }
+    .chart-legend span { display: flex; align-items: center; gap: 5px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .chart-wrapper { height: 210px; position: relative; }
+
+    /* ── Table ── */
+    .table-section {
+      background: #1e1e1e; border: 1px solid #2a2a2a;
+      border-radius: 10px; padding: 20px;
+    }
+    .table-header {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 12px; margin-bottom: 16px;
+    }
+    .table-title { font-size: 16px; font-weight: 600; }
+    .filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .filter-label { font-size: 13px; color: #888; }
+    .filter-select {
+      background: #252525; border: 1px solid #383838; color: #e0e0e0;
+      padding: 6px 12px; border-radius: 8px; font-size: 13px;
+      cursor: pointer; outline: none; min-width: 150px;
+    }
+    .filter-select:focus { border-color: #555; }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      text-align: left; padding: 10px 12px;
+      font-size: 12px; color: #666; font-weight: 500;
+      border-bottom: 1px solid #2a2a2a; text-transform: uppercase; letter-spacing: .04em;
+    }
+    tbody tr { border-bottom: 1px solid #222; transition: background .12s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #232323; }
+    tbody td { padding: 10px 12px; font-size: 13px; color: #ccc; vertical-align: middle; }
+
+    .col-title { color: #e0e0e0; max-width: 320px; }
+    .col-title span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+
+    .badge {
+      display: inline-block; padding: 3px 10px;
+      border-radius: 12px; font-size: 12px; font-weight: 500; white-space: nowrap;
+    }
+
+    .empty-row { text-align: center; color: #444; padding: 36px !important; }
+    .table-footer { margin-top: 12px; font-size: 12px; color: #444; }
+
+    /* ── Loading / Error ── */
+    #loading {
+      position: fixed; inset: 0; background: rgba(0,0,0,.55);
+      display: none; align-items: center; justify-content: center;
+      z-index: 100; font-size: 15px; color: #aaa; gap: 10px;
+    }
+    .spinner {
+      width: 20px; height: 20px; border: 2px solid #444;
+      border-top-color: #aaa; border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #error-msg {
+      display: none; background: #1f1010; border: 1px solid #5c2020;
+      color: #f87171; padding: 12px 16px; border-radius: 8px;
+      margin-bottom: 16px; font-size: 13px;
+    }
+
+    @media (max-width: 900px) {
+      .cards-grid { grid-template-columns: repeat(2, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 500px) {
+      .cards-grid { grid-template-columns: 1fr 1fr; }
+      .container { padding: 14px 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="loading"><div class="spinner"></div>กำลังโหลด...</div>
+
+<header class="header">
+  <div class="header-brand">🐛 Bug Tracker — STIN-EDU</div>
+  <div class="header-right">
+    <span id="last-updated"></span>
+    <button class="refresh-btn" id="refresh-btn">↻ รีเฟรช</button>
+  </div>
+</header>
+
+<div class="container">
+  <div id="error-msg"></div>
+
+  <!-- Summary Cards -->
+  <div class="cards-grid">
+    <div class="card">
+      <div class="card-label">Summary</div>
+      <div class="card-value c-total" id="card-total">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">New Bug</div>
+      <div class="card-value c-new" id="card-new">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Need-Review</div>
+      <div class="card-value c-progress" id="card-inprogress">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Fixed / Verified</div>
+      <div class="card-value c-fixed" id="card-fixed">—</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">Bugs-Status</div>
+      <div class="chart-legend" id="status-legend"></div>
+      <div class="chart-wrapper"><canvas id="statusChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Bugs in Modules</div>
+      <div class="chart-legend" id="module-legend"></div>
+      <div class="chart-wrapper"><canvas id="moduleChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-section">
+    <div class="table-header">
+      <div class="table-title">รายการทั้งหมด</div>
+      <div class="filters">
+        <span class="filter-label">กรองตาม:</span>
+        <select class="filter-select" id="filter-status">
+          <option value="">ทุก status</option>
+        </select>
+        <select class="filter-select" id="filter-module">
+          <option value="">ทุก module</option>
+        </select>
+        <button class="export-btn" id="export-btn">⬇ Export Excel</button>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>เรื่อง</th>
+          <th>Module</th>
+          <th>เมนู/หน้า</th>
+          <th>สถานะ</th>
+          <th>บันทึกโดย</th>
+          <th>วันที่</th>
+        </tr>
+      </thead>
+      <tbody id="bug-tbody">
+        <tr><td colspan="6" class="empty-row">กำลังโหลดข้อมูล...</td></tr>
+      </tbody>
+    </table>
+    <div class="table-footer" id="table-count"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
