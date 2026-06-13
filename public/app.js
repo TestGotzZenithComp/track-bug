@@ -180,6 +180,14 @@ function renderTable(bugs) {
     const statColor = colorForStatus(b.status);
     const title = b.title.length > 45 ? b.title.slice(0, 45) + '…' : b.title;
 
+    const statusOptions = Object.keys(STATUS_PALETTE).map(s =>
+      `<option value="${escHtml(s)}" ${b.status === s ? 'selected' : ''}>${escHtml(s)}</option>`
+    ).join('');
+
+    const screenshotCell = b.screenshot
+      ? `<img class="thumb" src="${escHtml(b.screenshot)}" alt="screenshot" data-src="${escHtml(b.screenshot)}" />`
+      : '—';
+
     return `
     <tr>
       <td class="col-title"><span title="${escHtml(b.title)}">${escHtml(title)}</span></td>
@@ -190,12 +198,14 @@ function renderTable(bugs) {
       </td>
       <td>${escHtml(b.menu || '—')}</td>
       <td>
-        <span class="badge" style="background:${statColor}28;color:${statColor}">
-          ${escHtml(b.status || '—')}
-        </span>
+        <select class="status-select badge" data-id="${escHtml(b.id)}"
+          style="background:${statColor}28;color:${statColor}">
+          ${statusOptions}
+        </select>
       </td>
       <td>${escHtml(b.assignee || '—')}</td>
       <td style="white-space:nowrap">${formatShortDate(b.date)}</td>
+      <td>${screenshotCell}</td>
     </tr>`;
   }).join('');
 }
@@ -274,6 +284,48 @@ async function loadData() {
     loadEl.style.display = 'none';
   }
 }
+
+async function updateStatus(id, newStatus) {
+  const res = await fetch(`/api/bugs/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: newStatus }),
+  });
+  if (!res.ok) {
+    alert('อัปเดต status ไม่สำเร็จ กรุณาลองใหม่');
+    return false;
+  }
+  const bug = allBugs.find(b => b.id === id);
+  if (bug) bug.status = newStatus;
+  renderCards(allBugs);
+  renderStatusChart(allBugs);
+  return true;
+}
+
+/* ── Event delegation ── */
+document.getElementById('bug-tbody').addEventListener('change', async e => {
+  const sel = e.target.closest('.status-select');
+  if (!sel) return;
+  const id = sel.dataset.id;
+  const newStatus = sel.value;
+  const color = colorForStatus(newStatus);
+  sel.style.background = `${color}28`;
+  sel.style.color = color;
+  await updateStatus(id, newStatus);
+});
+
+document.getElementById('bug-tbody').addEventListener('click', e => {
+  const img = e.target.closest('.thumb');
+  if (!img) return;
+  document.getElementById('lightbox-img').src = img.dataset.src;
+  document.getElementById('lightbox').classList.add('open');
+});
+
+document.getElementById('lightbox').addEventListener('click', e => {
+  if (e.target.id === 'lightbox' || e.target.id === 'lightbox-close') {
+    document.getElementById('lightbox').classList.remove('open');
+  }
+});
 
 document.getElementById('filter-status').addEventListener('change', applyFilters);
 document.getElementById('filter-module').addEventListener('change', applyFilters);

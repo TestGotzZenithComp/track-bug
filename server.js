@@ -7,6 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 
 const notion = axios.create({
   baseURL: 'https://api.notion.com/v1',
@@ -66,6 +67,9 @@ async function fetchAllBugs() {
           p['Status']?.status?.name ||
           p['สถานะ']?.select?.name ||
           p['สถานะ']?.status?.name || '',
+        screenshot:
+          p['Screenshot']?.files?.[0]?.file?.url ||
+          p['Screenshot']?.files?.[0]?.external?.url || '',
         date: page.created_time,
         url: p['URL']?.url || '',
         _relationIds: relationIds,
@@ -104,6 +108,24 @@ app.get('/api/bugs', async (req, res) => {
       error: 'โหลดข้อมูลจาก Notion ไม่ได้',
       detail: err.response?.data?.message || err.message,
     });
+  }
+});
+
+app.patch('/api/bugs/:id', async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  if (!status) return res.status(400).json({ error: 'status required' });
+
+  try {
+    await notion.patch(`/pages/${id}`, {
+      properties: {
+        'Status': { select: { name: status } },
+      },
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err.response?.data || err.message);
+    res.status(500).json({ error: err.response?.data?.message || err.message });
   }
 });
 
