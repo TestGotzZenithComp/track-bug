@@ -184,13 +184,18 @@ function renderTable(bugs) {
       `<option value="${escHtml(s)}" ${b.status === s ? 'selected' : ''}>${escHtml(s)}</option>`
     ).join('');
 
-    const screenshotCell = b.screenshot
-      ? `<img class="thumb" src="${escHtml(b.screenshot)}" alt="screenshot" data-src="${escHtml(b.screenshot)}" />`
-      : '—';
+    const screenshotSrc = b.screenshot;
+    const screenshotCell = screenshotSrc
+      ? `<img class="thumb" src="${escHtml(screenshotSrc)}" alt="screenshot" data-src="${escHtml(screenshotSrc)}" />`
+      : `<span class="thumb-placeholder" data-id="${escHtml(b.id)}" title="คลิกเพื่อโหลดรูป">📷</span>`;
+
+    const notionLink = b.notionUrl
+      ? `<a href="${escHtml(b.notionUrl)}" target="_blank" rel="noopener" class="title-link" title="${escHtml(b.title)}">${escHtml(title)}</a>`
+      : `<span title="${escHtml(b.title)}">${escHtml(title)}</span>`;
 
     return `
     <tr>
-      <td class="col-title"><span title="${escHtml(b.title)}">${escHtml(title)}</span></td>
+      <td class="col-title">${notionLink}</td>
       <td>
         <span class="badge" style="background:${modColor}22;color:${modColor};border:1px solid ${modColor}44">
           ${escHtml(b.module || '—')}
@@ -314,11 +319,36 @@ document.getElementById('bug-tbody').addEventListener('change', async e => {
   await updateStatus(id, newStatus);
 });
 
-document.getElementById('bug-tbody').addEventListener('click', e => {
+document.getElementById('bug-tbody').addEventListener('click', async e => {
   const img = e.target.closest('.thumb');
-  if (!img) return;
-  document.getElementById('lightbox-img').src = img.dataset.src;
-  document.getElementById('lightbox').classList.add('open');
+  if (img) {
+    document.getElementById('lightbox-img').src = img.dataset.src;
+    document.getElementById('lightbox').classList.add('open');
+    return;
+  }
+
+  const placeholder = e.target.closest('.thumb-placeholder');
+  if (!placeholder) return;
+  const id = placeholder.dataset.id;
+  placeholder.textContent = '⏳';
+  try {
+    const res = await fetch(`/api/bugs/${id}/screenshot`);
+    const { url } = await res.json();
+    if (url) {
+      const img2 = document.createElement('img');
+      img2.className = 'thumb';
+      img2.src = url;
+      img2.dataset.src = url;
+      img2.alt = 'screenshot';
+      placeholder.replaceWith(img2);
+      document.getElementById('lightbox-img').src = url;
+      document.getElementById('lightbox').classList.add('open');
+    } else {
+      placeholder.textContent = '—';
+    }
+  } catch {
+    placeholder.textContent = '—';
+  }
 });
 
 document.getElementById('lightbox').addEventListener('click', e => {

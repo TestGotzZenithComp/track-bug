@@ -55,6 +55,7 @@ async function fetchAllBugs() {
 
       rawBugs.push({
         id: page.id,
+        notionUrl: page.url,
         title:
           p['ชื่อบัค']?.title?.[0]?.plain_text ||
           p['ชื่อบัด']?.title?.[0]?.plain_text ||
@@ -108,6 +109,17 @@ app.get('/api/bugs', async (req, res) => {
       error: 'โหลดข้อมูลจาก Notion ไม่ได้',
       detail: err.response?.data?.message || err.message,
     });
+  }
+});
+
+app.get('/api/bugs/:id/screenshot', async (req, res) => {
+  try {
+    const blocks = await notion.get(`/blocks/${req.params.id}/children?page_size=50`);
+    const imageBlock = blocks.data.results.find(b => b.type === 'image');
+    const url = imageBlock?.image?.file?.url || imageBlock?.image?.external?.url || null;
+    res.json({ url });
+  } catch (err) {
+    res.json({ url: null });
   }
 });
 
