@@ -106,6 +106,10 @@ app.get('/api/bugs', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Bug Tracker → http://localhost:${PORT}`);
-});
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`Bug Tracker → http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
