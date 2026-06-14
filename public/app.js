@@ -1,6 +1,9 @@
 'use strict';
 
 let allBugs = [];
+let filteredBugs = [];
+let currentPage = 1;
+const PAGE_SIZE = 10;
 let statusChart = null;
 let moduleChart = null;
 
@@ -164,18 +167,50 @@ function populateFilters(bugs) {
     modules.map(m => `<option value="${m}">${m}</option>`).join('');
 }
 
+/* ── Pagination ── */
+function renderPagination(total) {
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const el = document.getElementById('pagination');
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+
+  const maxBtn = 5;
+  let start = Math.max(1, currentPage - Math.floor(maxBtn / 2));
+  let end   = Math.min(totalPages, start + maxBtn - 1);
+  if (end - start < maxBtn - 1) start = Math.max(1, end - maxBtn + 1);
+
+  let html = `<button class="page-btn" id="pg-prev" ${currentPage === 1 ? 'disabled' : ''}>&laquo;</button>`;
+  if (start > 1) html += `<button class="page-btn" data-page="1">1</button>${start > 2 ? '<span style="color:#555;padding:0 4px">…</span>' : ''}`;
+  for (let i = start; i <= end; i++) {
+    html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
+  }
+  if (end < totalPages) html += `${end < totalPages - 1 ? '<span style="color:#555;padding:0 4px">…</span>' : ''}<button class="page-btn" data-page="${totalPages}">${totalPages}</button>`;
+  html += `<button class="page-btn" id="pg-next" ${currentPage === totalPages ? 'disabled' : ''}>&raquo;</button>`;
+  el.innerHTML = html;
+}
+
 /* ── Table ── */
 function renderTable(bugs) {
+  filteredBugs = bugs;
+  currentPage = 1;
+  renderPage();
+}
+
+function renderPage() {
+  const bugs = filteredBugs;
   const tbody = document.getElementById('bug-tbody');
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageBugs = bugs.slice(start, start + PAGE_SIZE);
+
   document.getElementById('table-count').textContent =
-    `แสดง ${bugs.length} รายการ จาก ${allBugs.length} ทั้งหมด`;
+    `แสดง ${start + 1}–${Math.min(start + PAGE_SIZE, bugs.length)} จาก ${bugs.length} รายการ (ทั้งหมด ${allBugs.length})`;
 
   if (!bugs.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-row">ยังไม่มีบัด ที่ตรงกับตัวกรอง</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-row">ยังไม่มีบัดที่ตรงกับตัวกรอง</td></tr>';
+    renderPagination(0);
     return;
   }
 
-  tbody.innerHTML = bugs.map((b, idx) => {
+  tbody.innerHTML = pageBugs.map((b, idx) => {
     const modColor = colorForModule(b.module, idx);
     const statColor = colorForStatus(b.status);
     const title = b.title.length > 45 ? b.title.slice(0, 45) + '…' : b.title;
@@ -213,6 +248,8 @@ function renderTable(bugs) {
       <td>${screenshotCell}</td>
     </tr>`;
   }).join('');
+
+  renderPagination(bugs.length);
 }
 
 function escHtml(s) {
@@ -355,6 +392,17 @@ document.getElementById('lightbox').addEventListener('click', e => {
   if (e.target.id === 'lightbox' || e.target.id === 'lightbox-close') {
     document.getElementById('lightbox').classList.remove('open');
   }
+});
+
+document.getElementById('pagination').addEventListener('click', e => {
+  const btn = e.target.closest('.page-btn');
+  if (!btn || btn.disabled) return;
+  const totalPages = Math.ceil(filteredBugs.length / PAGE_SIZE);
+  if (btn.id === 'pg-prev') currentPage = Math.max(1, currentPage - 1);
+  else if (btn.id === 'pg-next') currentPage = Math.min(totalPages, currentPage + 1);
+  else currentPage = parseInt(btn.dataset.page);
+  renderPage();
+  document.querySelector('.table-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
 document.getElementById('filter-status').addEventListener('change', applyFilters);
