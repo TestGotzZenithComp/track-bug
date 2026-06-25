@@ -29,6 +29,16 @@
       z-index: 10;
     }
     .header-brand { font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .tracker-wrapper { position: relative; display: inline-flex; align-items: center; }
+    .tracker-wrapper::after { content: '▾'; position: absolute; right: 0; color: #666; pointer-events: none; font-size: 13px; }
+    .tracker-select {
+      background: transparent; border: none; color: #e0e0e0;
+      font-size: 17px; font-weight: 600; cursor: pointer;
+      outline: none; padding: 2px 20px 2px 0;
+      appearance: none; -webkit-appearance: none;
+    }
+    .tracker-select:hover { color: #fff; }
+    .tracker-select option { background: #1c1c1c; color: #e0e0e0; font-size: 14px; font-weight: 400; }
     .header-right { display: flex; align-items: center; gap: 12px; }
     #last-updated { font-size: 12px; color: #666; }
     .refresh-btn {
@@ -198,7 +208,14 @@
 </div>
 
 <header class="header">
-  <div class="header-brand">🐛 Bug Tracker — STIN-EDU</div>
+  <div class="header-brand">
+    🐛
+    <div class="tracker-wrapper">
+      <select id="tracker-select" class="tracker-select">
+        <option>กำลังโหลด...</option>
+      </select>
+    </div>
+  </div>
   <div class="header-right">
     <span id="last-updated"></span>
     <button class="refresh-btn" id="refresh-btn">↻ รีเฟรช</button>
@@ -260,7 +277,7 @@
 
     <table>
       <thead>
-        <tr>
+        <tr id="bug-thead-row">
           <th>เรื่อง</th>
           <th>Module</th>
           <th>เมนู/หน้า</th>
@@ -271,7 +288,7 @@
         </tr>
       </thead>
       <tbody id="bug-tbody">
-        <tr><td colspan="6" class="empty-row">กำลังโหลดข้อมูล...</td></tr>
+        <tr><td colspan="7" class="empty-row">กำลังโหลดข้อมูล...</td></tr>
       </tbody>
     </table>
     <div class="table-footer">

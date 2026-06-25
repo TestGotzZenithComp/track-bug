@@ -6,6 +6,8 @@ let currentPage = 1;
 const PAGE_SIZE = 10;
 let statusChart = null;
 let moduleChart = null;
+let currentTrackerKey = null;
+let showExtraCols = false;
 
 const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
@@ -190,6 +192,24 @@ function renderPagination(total) {
 }
 
 /* ── Table ── */
+function totalCols() { return showExtraCols ? 10 : 7; }
+
+function renderHeader() {
+  document.getElementById('bug-thead-row').innerHTML = `
+    <th>เรื่อง</th>
+    <th>Module</th>
+    <th>เมนู/หน้า</th>
+    ${showExtraCols ? `
+    <th>ขั้นตอนการทดสอบ</th>
+    <th>ผลที่คาดหวัง</th>
+    <th>ผลจริง</th>` : ''}
+    <th>สถานะ</th>
+    <th>บันทึกโดย</th>
+    <th>วันที่</th>
+    <th>Screenshot</th>
+  `;
+}
+
 function renderTable(bugs) {
   filteredBugs = bugs;
   currentPage = 1;
@@ -206,7 +226,7 @@ function renderPage() {
     `แสดง ${start + 1}–${Math.min(start + PAGE_SIZE, bugs.length)} จาก ${bugs.length} รายการ (ทั้งหมด ${allBugs.length})`;
 
   if (!bugs.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-row">ยังไม่มีบัดที่ตรงกับตัวกรอง</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="${totalCols()}" class="empty-row">ยังไม่มีบัดที่ตรงกับตัวกรอง</td></tr>`;
     renderPagination(0);
     return;
   }
@@ -229,6 +249,8 @@ function renderPage() {
       ? `<a href="${escHtml(b.notionUrl)}" target="_blank" rel="noopener" class="title-link" title="${escHtml(b.title)}">${escHtml(title)}</a>`
       : `<span title="${escHtml(b.title)}">${escHtml(title)}</span>`;
 
+    const truncate = (s, n) => s && s.length > n ? s.slice(0, n) + '…' : (s || '—');
+
     return `
     <tr>
       <td class="col-title">${notionLink}</td>
@@ -238,6 +260,11 @@ function renderPage() {
         </span>
       </td>
       <td>${escHtml(b.menu || '—')}</td>
+      ${showExtraCols ? `
+      <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(b.testSteps)}">${escHtml(truncate(b.testSteps, 60))}</td>
+      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(b.expectedResult)}">${escHtml(truncate(b.expectedResult, 50))}</td>
+      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(b.actualResult)}">${escHtml(truncate(b.actualResult, 50))}</td>
+      ` : ''}
       <td>
         <select class="status-select badge" data-id="${escHtml(b.id)}"
           style="background:${statColor}28;color:${statColor}">
@@ -296,6 +323,25 @@ function exportExcel() {
   XLSX.writeFile(wb, filename);
 }
 
+/* ── Trackers ── */
+async function loadTrackers() {
+  try {
+    const res = await fetch('/api/trackers');
+    const trackers = await res.json();
+    const sel = document.getElementById('tracker-select');
+    if (!trackers.length) {
+      sel.innerHTML = '<option>ยังไม่มี Tracker</option>';
+      return;
+    }
+    sel.innerHTML = trackers.map(t =>
+      `<option value="${t.key}">${t.name}</option>`
+    ).join('');
+    currentTrackerKey = trackers[0].key;
+  } catch {
+    document.getElementById('tracker-select').innerHTML = '<option>โหลดไม่ได้</option>';
+  }
+}
+
 /* ── Load data ── */
 async function loadData() {
   const loadEl = document.getElementById('loading');
@@ -304,11 +350,17 @@ async function loadData() {
   errEl.style.display  = 'none';
 
   try {
-    const res = await fetch('/api/bugs');
+    const url = currentTrackerKey !== null
+      ? `/api/bugs?tracker=${encodeURIComponent(currentTrackerKey)}`
+      : '/api/bugs';
+    const res = await fetch(url);
     const json = await res.json();
     if (!res.ok) throw new Error(json.detail || json.error || res.statusText);
 
     allBugs = json;
+
+    showExtraCols = allBugs.some(b => b.testSteps || b.expectedResult || b.actualResult);
+    renderHeader();
 
     renderCards(allBugs);
     renderStatusChart(allBugs);
@@ -411,4 +463,12 @@ document.getElementById('filter-module').addEventListener('change', applyFilters
 document.getElementById('refresh-btn').addEventListener('click', loadData);
 document.getElementById('export-btn').addEventListener('click', exportExcel);
 
-loadData();
+document.getElementById('tracker-select').addEventListener('change', e => {
+  currentTrackerKey = e.target.value;
+  loadData();
+});
+
+(async () => {
+  await loadTrackers();
+  loadData();
+})();

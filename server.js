@@ -18,6 +18,23 @@ const notion = axios.create({
   },
 });
 
+// Load trackers from TRACKER_N_NAME / TRACKER_N_ID env vars
+function loadTrackers() {
+  const trackers = [];
+  let i = 1;
+  while (process.env[`TRACKER_${i}_NAME`] !== undefined) {
+    const name = process.env[`TRACKER_${i}_NAME`];
+    const id   = process.env[`TRACKER_${i}_ID`];
+    if (name && id) {
+      trackers.push({ key: String(i - 1), name, id });
+    }
+    i++;
+  }
+  return trackers;
+}
+
+const TRACKERS = loadTrackers();
+
 /* Fetch a single page title (used to resolve relation names) */
 const pageCache = {};
 async function resolvePageTitle(pageId) {
@@ -36,7 +53,7 @@ async function resolvePageTitle(pageId) {
   }
 }
 
-async function fetchAllBugs() {
+async function fetchAllBugs(databaseId) {
   const rawBugs = [];
   let cursor;
 
@@ -44,7 +61,7 @@ async function fetchAllBugs() {
     const body = { page_size: 100 };
     if (cursor) body.start_cursor = cursor;
 
-    const res = await notion.post(`/databases/${process.env.DATABASE_ID}/query`, body);
+    const res = await notion.post(`/databases/${databaseId}/query`, body);
     const data = res.data;
 
     for (const page of data.results) {
@@ -73,6 +90,9 @@ async function fetchAllBugs() {
           p['Screenshot']?.files?.[0]?.external?.url || '',
         date: page.created_time,
         url: p['URL']?.url || '',
+        testSteps:      p['Test Steps']?.rich_text?.map(r => r.plain_text).join('') || '',
+        expectedResult: p['Expected Result']?.rich_text?.map(r => r.plain_text).join('') || '',
+        actualResult:   p['Actual Result']?.rich_text?.map(r => r.plain_text).join('') || '',
         _relationIds: relationIds,
       });
     }
@@ -96,12 +116,23 @@ async function fetchAllBugs() {
   return bugs;
 }
 
+app.get('/api/trackers', (req, res) => {
+  res.json(TRACKERS.map(t => ({ key: t.key, name: t.name })));
+});
+
 app.get('/api/bugs', async (req, res) => {
   try {
-    if (!process.env.NOTION_TOKEN || !process.env.DATABASE_ID) {
-      return res.status(500).json({ error: 'กรุณาตั้งค่า NOTION_TOKEN และ DATABASE_ID ใน .env' });
+    if (!process.env.NOTION_TOKEN) {
+      return res.status(500).json({ error: 'กรุณาตั้งค่า NOTION_TOKEN ใน .env' });
     }
-    const bugs = await fetchAllBugs();
+    if (!TRACKERS.length) {
+      return res.status(500).json({ error: 'ยังไม่มี Tracker ที่ตั้งค่าใน .env (TRACKER_N_NAME / TRACKER_N_ID)' });
+    }
+
+    const key = req.query.tracker;
+    const tracker = (key !== undefined ? TRACKERS.find(t => t.key === key) : null) || TRACKERS[0];
+
+    const bugs = await fetchAllBugs(tracker.id);
     res.json(bugs);
   } catch (err) {
     console.error(err.response?.data || err.message);
