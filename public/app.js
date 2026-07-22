@@ -7,7 +7,9 @@ const PAGE_SIZE = 10;
 let statusChart = null;
 let moduleChart = null;
 let currentTrackerKey = null;
-let showExtraCols = false;
+let showTestSteps = false;
+let showExpectedResult = false;
+let showActualResult = false;
 
 const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
@@ -192,17 +194,18 @@ function renderPagination(total) {
 }
 
 /* ── Table ── */
-function totalCols() { return showExtraCols ? 10 : 7; }
+function totalCols() {
+  return 7 + (showTestSteps ? 1 : 0) + (showExpectedResult ? 1 : 0) + (showActualResult ? 1 : 0);
+}
 
 function renderHeader() {
   document.getElementById('bug-thead-row').innerHTML = `
     <th>เรื่อง</th>
     <th>Module</th>
     <th>เมนู/หน้า</th>
-    ${showExtraCols ? `
-    <th>ขั้นตอนการทดสอบ</th>
-    <th>ผลที่คาดหวัง</th>
-    <th>ผลจริง</th>` : ''}
+    ${showTestSteps ? '<th>ขั้นตอนการทดสอบ</th>' : ''}
+    ${showExpectedResult ? '<th>ผลที่คาดหวัง</th>' : ''}
+    ${showActualResult ? '<th>ผลจริง</th>' : ''}
     <th>สถานะ</th>
     <th>บันทึกโดย</th>
     <th>วันที่</th>
@@ -260,11 +263,9 @@ function renderPage() {
         </span>
       </td>
       <td>${escHtml(b.menu || '—')}</td>
-      ${showExtraCols ? `
-      <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(b.testSteps)}">${escHtml(truncate(b.testSteps, 60))}</td>
-      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(b.expectedResult)}">${escHtml(truncate(b.expectedResult, 50))}</td>
-      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(b.actualResult)}">${escHtml(truncate(b.actualResult, 50))}</td>
-      ` : ''}
+      ${showTestSteps ? `<td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(b.testSteps)}">${escHtml(truncate(b.testSteps, 60))}</td>` : ''}
+      ${showExpectedResult ? `<td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(b.expectedResult)}">${escHtml(truncate(b.expectedResult, 50))}</td>` : ''}
+      ${showActualResult ? `<td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(b.actualResult)}">${escHtml(truncate(b.actualResult, 50))}</td>` : ''}
       <td>
         <select class="status-select badge" data-id="${escHtml(b.id)}"
           style="background:${statColor}28;color:${statColor}">
@@ -359,7 +360,9 @@ async function loadData() {
 
     allBugs = json;
 
-    showExtraCols = allBugs.some(b => b.testSteps || b.expectedResult || b.actualResult);
+    showTestSteps = allBugs.some(b => b.testSteps);
+    showExpectedResult = allBugs.some(b => b.expectedResult);
+    showActualResult = allBugs.some(b => b.actualResult);
     renderHeader();
 
     renderCards(allBugs);
