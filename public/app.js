@@ -188,7 +188,9 @@ function renderModuleChart(bugs) {
 
 /* ── Filters ── */
 function populateFilters(bugs) {
-  const statuses = [...new Set(bugs.map(b => b.status).filter(Boolean))].sort();
+  // Statuses come from the shared STATUS_PALETTE enum (not from the current bug data) so every
+  // known status — including ones with zero bugs right now, like Reject/Marked — is filterable.
+  const statuses = Object.keys(STATUS_PALETTE).sort();
   const modules  = [...new Set(bugs.map(b => b.module).filter(Boolean))].sort();
 
   const sel = id => document.getElementById(id);
