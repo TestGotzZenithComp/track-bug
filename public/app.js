@@ -11,12 +11,42 @@ let showTestSteps = false;
 let showExpectedResult = false;
 let showActualResult = false;
 
+/* ── Dropdown persistence (localStorage) ──
+   Generic enough that a new <select id="..."> only needs:
+     1. persistSelect('id')            — call once, near the other listeners
+     2. restoreSelect('id')            — call once, right after its <option>s are (re)populated
+*/
+const SELECT_STORAGE_PREFIX = 'trackbug:select:';
+
+function saveSelectValue(id, value) {
+  try { localStorage.setItem(SELECT_STORAGE_PREFIX + id, value); } catch {}
+}
+
+function loadSelectValue(id) {
+  try { return localStorage.getItem(SELECT_STORAGE_PREFIX + id); } catch { return null; }
+}
+
+function persistSelect(id) {
+  document.getElementById(id).addEventListener('change', e => saveSelectValue(id, e.target.value));
+}
+
+function restoreSelect(id) {
+  const el = document.getElementById(id);
+  const saved = loadSelectValue(id);
+  if (saved !== null && [...el.options].some(o => o.value === saved)) {
+    el.value = saved;
+  }
+  return el.value;
+}
+
 const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
 const STATUS_PALETTE = {
   'new bug': '#ef4444',
+  'Marked': '#eab308',
   'Need-Review': '#f97316',
   'Fixed / Verified': '#22c55e',
+  'Reject': '#6b7280',
 };
 
 const MODULE_PALETTE = {
@@ -170,6 +200,9 @@ function populateFilters(bugs) {
   sel('filter-module').innerHTML =
     '<option value="">ทุก module</option>' +
     modules.map(m => `<option value="${m}">${m}</option>`).join('');
+
+  restoreSelect('filter-status');
+  restoreSelect('filter-module');
 }
 
 /* ── Pagination ── */
@@ -337,7 +370,7 @@ async function loadTrackers() {
     sel.innerHTML = trackers.map(t =>
       `<option value="${t.key}">${t.name}</option>`
     ).join('');
-    currentTrackerKey = trackers[0].key;
+    currentTrackerKey = restoreSelect('tracker-select');
   } catch {
     document.getElementById('tracker-select').innerHTML = '<option>โหลดไม่ได้</option>';
   }
@@ -369,7 +402,7 @@ async function loadData() {
     renderStatusChart(allBugs);
     renderModuleChart(allBugs);
     populateFilters(allBugs);
-    renderTable(allBugs);
+    applyFilters();
 
     document.getElementById('last-updated').textContent =
       'อัปเดตล่าสุด: ' + formatFullDate(new Date().toISOString());
@@ -460,6 +493,10 @@ document.getElementById('pagination').addEventListener('click', e => {
   renderPage();
   document.querySelector('.table-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
+
+persistSelect('filter-status');
+persistSelect('filter-module');
+persistSelect('tracker-select');
 
 document.getElementById('filter-status').addEventListener('change', applyFilters);
 document.getElementById('filter-module').addEventListener('change', applyFilters);
