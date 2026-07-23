@@ -42,7 +42,7 @@ function restoreSelect(id) {
 const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
 const STATUS_PALETTE = {
-  'new bug': '#ef4444',
+  'New Bug': '#ef4444',
   'Marked': '#eab308',
   'Need-Review': '#f97316',
   'Fixed / Verified': '#22c55e',
