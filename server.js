@@ -172,6 +172,103 @@ app.patch('/api/bugs/:id', async (req, res) => {
   }
 });
 
+/* ── GitHub Actions deployment status ──
+   The PAT stays here: the browser only ever sees the mapped payload below. */
+const GITHUB_ENV = ['GITHUB_TOKEN', 'GITHUB_OWNER', 'GITHUB_REPO', 'GITHUB_WORKFLOW'];
+
+/* The panel polls every 5s while a run is in flight; a short server-side cache keeps
+   several open dashboards from multiplying that into the GitHub rate limit. */
+const GH_CACHE_TTL = 3000;
+let ghCache = { at: 0, payload: null };
+
+function githubClient() {
+  return axios.create({
+    baseURL: 'https://api.github.com',
+    timeout: 10000,
+    headers: {
+      Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'track-bug-dashboard',
+    },
+  });
+}
+
+function mapSuccess(run) {
+  if (!run) return null;
+  const started = new Date(run.run_started_at || run.created_at).getTime();
+  const ended = new Date(run.updated_at).getTime();
+  const durationSeconds =
+    Number.isFinite(started) && Number.isFinite(ended) && ended >= started
+      ? Math.round((ended - started) / 1000)
+      : null;
+
+  return {
+    runNumber: run.run_number,
+    branch: run.head_branch,
+    commit: (run.head_sha || '').slice(0, 7),
+    actor: run.actor?.login || run.triggering_actor?.login || '',
+    completedAt: run.updated_at,
+    durationSeconds,
+    url: run.html_url,
+    conclusion: run.conclusion,
+  };
+}
+
+function mapRunning(run) {
+  if (!run) return null;
+  return {
+    runNumber: run.run_number,
+    status: run.status,
+    startedAt: run.run_started_at || run.created_at,
+    url: run.html_url,
+  };
+}
+
+app.get('/api/github-actions', async (req, res) => {
+  const missing = GITHUB_ENV.filter(k => !process.env[k]);
+  if (missing.length) {
+    return res.status(500).json({
+      error: 'ยังไม่ได้ตั้งค่า GitHub ใน .env',
+      detail: `ขาด: ${missing.join(', ')}`,
+    });
+  }
+
+  if (ghCache.payload && Date.now() - ghCache.at < GH_CACHE_TTL) {
+    return res.json(ghCache.payload);
+  }
+
+  try {
+    const gh = githubClient();
+    const runsPath =
+      `/repos/${encodeURIComponent(process.env.GITHUB_OWNER)}` +
+      `/${encodeURIComponent(process.env.GITHUB_REPO)}` +
+      `/actions/workflows/${encodeURIComponent(process.env.GITHUB_WORKFLOW)}/runs`;
+
+    const [successRes, recentRes] = await Promise.all([
+      gh.get(runsPath, { params: { status: 'success', per_page: 1 } }),
+      gh.get(runsPath, { params: { per_page: 10 } }),
+    ]);
+
+    // Anything not yet "completed" is live — covers queued / waiting / pending / in_progress.
+    const running = (recentRes.data.workflow_runs || []).find(r => r.status !== 'completed');
+
+    const payload = {
+      latestSuccess: mapSuccess(successRes.data.workflow_runs?.[0]),
+      running: mapRunning(running),
+    };
+
+    ghCache = { at: Date.now(), payload };
+    res.json(payload);
+  } catch (err) {
+    console.error('[github-actions]', err.response?.data || err.message);
+    res.status(502).json({
+      error: 'เรียกข้อมูล GitHub Actions ไม่ได้',
+      detail: err.response?.data?.message || err.message,
+    });
+  }
+});
+
 if (process.env.VERCEL !== '1') {
   app.listen(PORT, () => {
     console.log(`Bug Tracker → http://localhost:${PORT}`);

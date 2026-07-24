@@ -378,6 +378,27 @@ async function loadTrackers() {
   }
 }
 
+/* ── GitHub deployment panel ──
+   Visible (and polling) only while the tracker dropdown is on this key. */
+const GITHUB_TRACKER_KEY = '2';
+
+const githubPoller = createGithubDeployment(state => GithubDeploymentCard.render(state));
+GithubDeploymentCard.mount(document.getElementById('github-panel'));
+
+function syncGithubPanel() {
+  const panel = document.getElementById('github-panel');
+  const visible = document.getElementById('tracker-select').value === GITHUB_TRACKER_KEY;
+
+  panel.hidden = !visible;
+
+  if (visible) {
+    githubPoller.start();
+  } else {
+    githubPoller.stop();
+    GithubDeploymentCard.destroy();
+  }
+}
+
 /* ── Load data ── */
 async function loadData() {
   const loadEl = document.getElementById('loading');
@@ -507,10 +528,12 @@ document.getElementById('export-btn').addEventListener('click', exportExcel);
 
 document.getElementById('tracker-select').addEventListener('change', e => {
   currentTrackerKey = e.target.value;
+  syncGithubPanel();
   loadData();
 });
 
 (async () => {
   await loadTrackers();
+  syncGithubPanel();
   loadData();
 })();
